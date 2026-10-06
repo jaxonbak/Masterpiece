@@ -48,21 +48,32 @@ const state = {
   expanded: {}
 };
 
-function load() {
-  try { state.seen = JSON.parse(localStorage.getItem("movie-watchlist-seen")||"{}"); } catch(e){}
-  try { state.favorites = JSON.parse(localStorage.getItem("movie-watchlist-favorites")||"{}"); } catch(e){}
-  try { state.priority = JSON.parse(localStorage.getItem("movie-watchlist-priority")||"{}"); } catch(e){}
-  try { state.notes = JSON.parse(localStorage.getItem("movie-watchlist-notes")||"{}"); } catch(e){}
-  render();
-}
+function load() { render(); }
 
-function save(key, obj) { localStorage.setItem("movie-watchlist-"+key, JSON.stringify(obj)); }
+function canEdit() { return !!(window.MP && window.MP.isOwner); }
+
+window.onCloudState = function (data) {
+  state.seen = data.seen || {};
+  state.favorites = data.favorites || {};
+  state.priority = data.priority || {};
+  state.notes = data.notes || {};
+  render();
+};
+
+window.onCloudStatus = function () { render(); };
+
+function save(key, obj) {
+  if (window.MP) window.MP.push({seen: state.seen, favorites: state.favorites, priority: state.priority, notes: state.notes});
+}
 
 document.addEventListener("click", function(e) {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.dataset.action;
   const title = el.dataset.title;
+  if (action === "signin") { if (window.MP) window.MP.signIn(); return; }
+  if (action === "signout") { if (window.MP) window.MP.signOut(); return; }
+  if ((action === "seen" || action === "fav" || action === "pri") && !canEdit()) return;
   if (action === "seen") {
     if (state.seen[title]) delete state.seen[title]; else state.seen[title] = true;
     save("seen", state.seen); render();
@@ -87,6 +98,7 @@ document.addEventListener("click", function(e) {
 
 document.addEventListener("input", function(e) {
   if (e.target.dataset.noteFor) {
+    if (!canEdit()) return;
     const title = e.target.dataset.noteFor;
     state.notes[title] = e.target.value;
     if (!state.notes[title]) delete state.notes[title];
@@ -162,7 +174,7 @@ const dim = isSeen && !inFav;
       </div>
       <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;align-items:center">${labelHtml}${tagsHtml}</div>
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+    <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;opacity:${canEdit()?1:0.4}">
       <a href="${trailerUrl}" target="_blank" rel="noopener noreferrer" class="btn-icon" style="font-size:13px;opacity:0.5;text-decoration:none" title="Watch trailer">\u25b6\ufe0f</a>
       <div data-action="pri" data-title="${titleAttr}" class="btn-icon" style="font-size:15px;opacity:${isPri?1:0.5};filter:${isPri?'drop-shadow(0 0 4px rgba(52,211,153,0.6))':'none'}">\u23f3</div>
       <div data-action="fav" data-title="${titleAttr}" class="btn-icon" style="font-size:18px;opacity:${isFav?1:0.3};filter:${isFav?'drop-shadow(0 0 4px rgba(251,191,36,0.6))':'grayscale(1)'}">\u2b50</div>
@@ -214,10 +226,23 @@ function render() {
   const searchEl = document.getElementById("searchInput");
   const cursorPos = searchEl ? searchEl.selectionStart : null;
 
+  const mp = window.MP || null;
+  const btnStyle = "background:#0f0f0f;border:1px solid #374151;color:#9ca3af;border-radius:8px;padding:6px 12px;font-size:11px;cursor:pointer";
+  let authHtml = '<span style="font-size:11px;color:#4b5563">connecting</span>';
+  if (mp && mp.isOwner) {
+    const lab = mp.status === "saving" ? "saving" : (mp.status === "error" ? "sync error" : "synced");
+    const col = mp.status === "error" ? "#f87171" : "#34d399";
+    authHtml = '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:' + col + '">' + lab + '</span><button data-action="signout" style="' + btnStyle + '">Sign out</button></div>';
+  } else if (mp && mp.user) {
+    authHtml = '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:#6b7280">viewing only</span><button data-action="signout" style="' + btnStyle + '">Sign out</button></div>';
+  } else if (mp) {
+    authHtml = '<button data-action="signin" style="background:#2563eb;border:none;color:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign in with Google</button>';
+  }
+
   document.getElementById("app").innerHTML = `
     <div style="background:linear-gradient(135deg,#111827,#0f0f0f);border-bottom:2px solid #2563eb;padding:32px 24px 24px">
       <div style="max-width:900px;margin:0 auto">
-        <h1 style="font-size:26px;font-weight:700;color:#f8fafc;letter-spacing:3px;text-transform:uppercase">Masterpiece</h1>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"><h1 style="font-size:26px;font-weight:700;color:#f8fafc;letter-spacing:3px;text-transform:uppercase">Masterpiece</h1>${authHtml}</div>
         <p style="color:#4b5563;margin-top:6px;font-size:13px">${total} films across ${NUM_SECTIONS} sections</p>
         <div style="margin-top:20px">
           <div style="display:flex;justify-content:space-between;margin-bottom:6px">
@@ -256,5 +281,24 @@ function render() {
 
 load();
 </script>
+<script>
+const firebaseConfig = {
+
+  apiKey: "AIzaSyBuFcibTG6t5sLxdOobKdHfMBvwwA117dM",
+
+  authDomain: "masterpiece-aa098.firebaseapp.com",
+
+  projectId: "masterpiece-aa098",
+
+  storageBucket: "masterpiece-aa098.firebasestorage.app",
+
+  messagingSenderId: "597826084648",
+
+  appId: "1:597826084648:web:3f93166630346af60bba1d"
+
+};
+  window.__MP_CONFIG__ = firebaseConfig;
+</script>
+<script type=module src=firebase-sync.js></script>
 </body>
 </html>
