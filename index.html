@@ -43,7 +43,7 @@ const LS = {
 };
 
 const state = {
-  seen: {}, favorites: {}, priority: {}, notes: {},
+  seen: {}, favorites: {}, priority: {}, notes: {}, ratings: {},
   filter: "all", activeSection: "all", search: "",
   expanded: {}
 };
@@ -57,13 +57,14 @@ window.onCloudState = function (data) {
   state.favorites = data.favorites || {};
   state.priority = data.priority || {};
   state.notes = data.notes || {};
+  state.ratings = data.ratings || {};
   render();
 };
 
 window.onCloudStatus = function () { render(); };
 
 function save(key, obj) {
-  if (window.MP) window.MP.push({seen: state.seen, favorites: state.favorites, priority: state.priority, notes: state.notes});
+  if (window.MP) window.MP.push({seen: state.seen, favorites: state.favorites, priority: state.priority, notes: state.notes, ratings: state.ratings});
 }
 
 document.addEventListener("click", function(e) {
@@ -74,6 +75,12 @@ document.addEventListener("click", function(e) {
   if (action === "signin") { if (window.MP) window.MP.signIn(); return; }
   if (action === "signout") { if (window.MP) window.MP.signOut(); return; }
   if ((action === "seen" || action === "fav" || action === "pri") && !canEdit()) return;
+  if (action === "rate") {
+    if (!canEdit()) return;
+    const rv = parseFloat(el.dataset.rate);
+    if (state.ratings[title] === rv) delete state.ratings[title]; else state.ratings[title] = rv;
+    save("ratings", state.ratings); render(); return;
+  }
   if (action === "seen") {
     if (state.seen[title]) delete state.seen[title]; else state.seen[title] = true;
     save("seen", state.seen); render();
@@ -163,6 +170,24 @@ const dim = isSeen && !inFav;
   const titleEsc = e(m.title);
   const titleAttr = m.title.replace(/"/g, "&quot;");
 
+  let ratingHtml = "";
+  if (isSeen) {
+    const rv = state.ratings[m.title] || 0;
+    let starsHtml = "";
+    for (let i = 1; i <= 5; i++) {
+      const pct = rv >= i ? 100 : (rv >= i - 0.5 ? 50 : 0);
+      starsHtml += '<span style="position:relative;display:inline-block;width:12px;height:13px;line-height:13px;font-size:12px">'
+        + '<span style="position:absolute;left:0;top:0;color:#374151">★</span>'
+        + (pct ? '<span style="position:absolute;left:0;top:0;width:' + pct + '%;overflow:hidden;color:#fbbf24">★</span>' : "")
+        + '<span data-action="rate" data-title="' + titleAttr + '" data-rate="' + (i - 0.5) + '" style="position:absolute;left:0;top:0;width:50%;height:100%;cursor:pointer"></span>'
+        + '<span data-action="rate" data-title="' + titleAttr + '" data-rate="' + i + '" style="position:absolute;left:50%;top:0;width:50%;height:100%;cursor:pointer"></span>'
+        + '</span>';
+    }
+    ratingHtml = '<span style="display:inline-flex;align-items:center;gap:1px;margin-left:8px">' + starsHtml
+      + (rv ? '<span style="font-size:10px;color:#6b7280;margin-left:5px">' + rv.toFixed(1) + '</span>' : "")
+      + '</span>';
+  }
+
   let labelHtml = "";
   if (m.label && ls.bg) {
     labelHtml = `<span class="label-tag" style="background:${ls.bg};color:${ls.text};border:1px solid ${ls.border}">${e(m.label)}</span>`;
@@ -178,7 +203,7 @@ const dim = isSeen && !inFav;
         <span style="color:#374151;font-size:12px">${m.year}</span>
         <span style="color:#4b5563;font-size:12px;font-style:italic">${e(m.genre)}</span>
       </div>
-      <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;align-items:center">${labelHtml}${tagsHtml}</div>
+      <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;align-items:center">${labelHtml}${tagsHtml}${ratingHtml}</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;opacity:${canEdit()?1:0.4}">
       <a href="${trailerUrl}" target="_blank" rel="noopener noreferrer" class="btn-icon" style="font-size:13px;opacity:0.5;text-decoration:none" title="Watch trailer">\u25b6\ufe0f</a>
