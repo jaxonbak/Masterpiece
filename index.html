@@ -44,7 +44,7 @@ const LS = {
 
 const state = {
   seen: {}, favorites: {}, priority: {}, notes: {}, ratings: {},
-  filter: "all", activeSection: "all", search: "",
+  filter: "all", activeSection: "all", search: "", sort: "default", minRating: 0,
   expanded: {}
 };
 
@@ -123,6 +123,24 @@ function matchSearch(m) {
     m.tags.some(t => t.toLowerCase().includes(s));
 }
 
+function arrange(movies) {
+  let out = movies;
+  if (state.minRating > 0) out = out.filter(m => (state.ratings[m.title] || 0) >= state.minRating);
+  if (state.sort === "rating-desc") {
+    return out.slice().sort(function (a, b) { return (state.ratings[b.title] || 0) - (state.ratings[a.title] || 0); });
+  }
+  if (state.sort === "rating-asc") {
+    return out.slice().sort(function (a, b) {
+      const ra = state.ratings[a.title] || 0, rb = state.ratings[b.title] || 0;
+      if (ra === 0 && rb === 0) return 0;
+      if (ra === 0) return 1;
+      if (rb === 0) return -1;
+      return ra - rb;
+    });
+  }
+  return sortSeenFirst(out);
+}
+
 function sortSeenFirst(movies) {
   return movies.slice().sort(function (a, b) {
     return (state.seen[b.title] ? 1 : 0) - (state.seen[a.title] ? 1 : 0);
@@ -132,14 +150,14 @@ function sortSeenFirst(movies) {
 function getFiltered() {
   const all = SECTIONS.flatMap(s => s.movies);
   if (state.search) {
-    return SECTIONS.map(s => ({...s, movies: sortSeenFirst(s.movies.filter(matchSearch))})).filter(s => s.movies.length);
+    return SECTIONS.map(s => ({...s, movies: arrange(s.movies.filter(matchSearch))})).filter(s => s.movies.length);
   }
   if (state.filter === 'favorites') {
-    const movies = all.filter(m => state.favorites[m.title]);
+    const movies = arrange(all.filter(m => state.favorites[m.title]));
     return movies.length ? [{id:'favorites',title:'Personal Favorites',intro:'Your all-time favorites.',movies}] : [];
   }
   if (state.filter === 'priority') {
-    const movies = all.filter(m => state.priority[m.title]);
+    const movies = arrange(all.filter(m => state.priority[m.title]));
     return movies.length ? [{id:'priority',title:'Priority Watch List',intro:'Films to watch next.',movies}] : [];
   }
   // Build favorites section at top
@@ -152,7 +170,7 @@ function getFiltered() {
       return mf && ms;
     })
   })).filter(s => s.movies.length);
-  return genreSections.map(s => ({...s, movies: sortSeenFirst(s.movies)}));
+  return genreSections.map(s => ({...s, movies: arrange(s.movies)}));
 }
 
 function e(s) { const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
@@ -294,6 +312,8 @@ function render() {
           <option value="all" ${state.activeSection==='all'?'selected':''}>All Sections</option>
           ${opts}
         </select>
+        <select id="sortSelect" style="background:#0f0f0f;border:1px solid #374151;border-radius:8px;color:#e2e8f0;padding:7px 12px;font-size:12px;cursor:pointer;outline:none"><option value="default" ${state.sort==='default'?'selected':''}>Watched first</option><option value="rating-desc" ${state.sort==='rating-desc'?'selected':''}>Highest rated</option><option value="rating-asc" ${state.sort==='rating-asc'?'selected':''}>Lowest rated</option></select>
+        <select id="minRatingSelect" style="background:#0f0f0f;border:1px solid #374151;border-radius:8px;color:#e2e8f0;padding:7px 12px;font-size:12px;cursor:pointer;outline:none"><option value="0" ${String(state.minRating)==='0'?'selected':''}>Any rating</option><option value="3" ${String(state.minRating)==='3'?'selected':''}>3+</option><option value="3.5" ${String(state.minRating)==='3.5'?'selected':''}>3.5+</option><option value="4" ${String(state.minRating)==='4'?'selected':''}>4+</option><option value="4.5" ${String(state.minRating)==='4.5'?'selected':''}>4.5+</option><option value="5" ${String(state.minRating)==='5'?'selected':''}>5 only</option></select>
       </div>
     </div>
     <div style="max-width:900px;margin:0 auto;padding:24px 16px 60px">${body}</div>`;
@@ -307,6 +327,12 @@ function render() {
   }
   document.getElementById("sectionSelect").addEventListener("change", function() {
     state.activeSection = this.value; render();
+  });
+  document.getElementById("sortSelect").addEventListener("change", function() {
+    state.sort = this.value; render();
+  });
+  document.getElementById("minRatingSelect").addEventListener("change", function() {
+    state.minRating = parseFloat(this.value) || 0; render();
   });
 }
 
