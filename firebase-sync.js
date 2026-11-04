@@ -45,6 +45,7 @@ const MP = {
         favorites: payload.favorites || {},
         priority: payload.priority || {},
         notes: payload.notes || {},
+        ratings: payload.ratings || {},
         updatedAt: Date.now()
       }).then(function () {
         MP.status = 'synced';
@@ -74,7 +75,8 @@ onSnapshot(ref, function (snap) {
       seen: data.seen || {},
       favorites: data.favorites || {},
       priority: data.priority || {},
-      notes: data.notes || {}
+      notes: data.notes || {},
+      ratings: data.ratings || {}
     });
   }
 }, function (err) {
